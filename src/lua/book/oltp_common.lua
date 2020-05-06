@@ -51,6 +51,10 @@ sysbench.cmdline.options = {
       {"Number of UPDATE index queries per transaction", 1},
    non_index_updates =
       {"Number of UPDATE non-index queries per transaction", 1},
+   update_based_on_data1 =
+      {"Number of UPDATE on data1 queries per transaction", 1},
+   update_based_on_data2 =
+      {"Number of UPDATE data2 no-index queries per transaction", 1},
    delete_inserts =
       {"Number of DELETE/INSERT combination per transaction", 1},
    range_selects =
@@ -150,17 +154,6 @@ local c_value_template = "@@@"
 local pad_value_template = "###########-###########-###########-" ..
    "###########-###########"
 
-function read_file_text()
-
-  local file = io.open("100-0.txt", "r");
-  local arr = {}
-  for line in file:lines() do
-      table.insert (arr, line);
-  end
-
-end
-
-
 function get_c_value()
    return sysbench.rand.string(c_value_template)
 end
@@ -245,7 +238,6 @@ function create_table(drv, con, table_num)
   PRIMARY KEY (`id`),
   KEY `IDX_millid` (`millid`,`active`),
   KEY `IDX_active` (`id`,`active`),
-  KEY `IDX_data1` (`data1`),
   KEY `IDX_data1` (`data1`)
   ) %s ROW_FORMAT=DYNAMIC  %s]],
 sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
@@ -302,7 +294,7 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
         -- "(uuid,millid,kwatts_s,date,location,active,strrecordtyped)
 	--
 	--
-         query = string.format("(%s, %d, %d,%s,'%s',%d,'%s','%s')",
+         query = string.format("(%s, %d, %d,%s,'%s',%d,'%s','%s','%s')",
                                uuid,
                                millid,
                                kwatts_s,
@@ -314,7 +306,7 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
                                data2
                                )
       else
-         query = string.format("(%d,%s, %d, %d,%s,'%s',%d,'%s','%s')",
+         query = string.format("(%d,%s, %d, %d,%s,'%s',%d,'%s','%s','%s')",
                                i,
                                uuid,
                                millid,
@@ -363,17 +355,23 @@ local stmt_defs = {
       "SELECT DISTINCT millid,active,kwatts_s   FROM %s%u WHERE id BETWEEN ? AND ? AND active =1 ORDER BY millid",
       t.INT, t.INT},
    index_updates = {
-      "UPDATE %s%u SET active=?,data1=? WHERE id=?",
-      t.INT,{t.CHAR,255},t.INT},
+      "UPDATE %s%u SET active=?,data1=?,data2=? WHERE id=?",
+      t.INT,{t.CHAR,255},{t.CHAR,255},t.INT},
    non_index_updates = {
-      "UPDATE %s%u SET strrecordtype=?,data1=? WHERE id=?",
-       {t.CHAR,3},{t.CHAR,255},t.INT},
+      "UPDATE %s%u SET strrecordtype=?,data1=?,data2=? WHERE id=?",
+       {t.CHAR,3},{t.CHAR,255},{t.CHAR,255},t.INT},
    deletes = {
       "DELETE FROM %s%u WHERE id=?",
       t.INT},
    inserts = {
-      "INSERT INTO %s%u (id,uuid,millid,kwatts_s,date,location,active,strrecordtype) VALUES (?, UUID(), ?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE kwatts_s=kwatts_s+1",
-      t.BIGINT, t.TINYINT,t.INT, {t.VARCHAR, 50},t.TINYINT, {t.CHAR, 3}},
+      "INSERT INTO %s%u (id,uuid,millid,kwatts_s,date,location,active,strrecordtype,data1,data2) VALUES (?, UUID(), ?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE kwatts_s=kwatts_s+1",
+      t.BIGINT, t.TINYINT,t.INT, {t.VARCHAR, 50},t.TINYINT, {t.CHAR, 3},{t.CHAR,255},{t.CHAR,255}},
+   update_based_on_data1 = {
+      "UPDATE %s%u SET data2=? WHERE data1=?",
+       {t.CHAR,255},{t.CHAR,255}},
+   update_based_on_data2 = {
+      "UPDATE %s%u SET data1=? WHERE data2=?",
+       {t.CHAR,255},{t.CHAR,255}},
 
 }
 
@@ -445,6 +443,14 @@ end
 
 function prepare_non_index_updates()
    prepare_for_each_table("non_index_updates")
+end
+
+function prepare_update_based_on_data1()
+   prepare_for_each_table("update_based_on_data1")
+end
+
+function prepare_update_based_on_data2()
+   prepare_for_each_table("update_based_on_data2")
 end
 
 function prepare_delete_inserts()
@@ -562,13 +568,15 @@ function execute_index_updates()
 
    for i = 1, sysbench.opt.index_updates do
       param[tnum].index_updates[1]:set(0)
-      param[tnum].index_updates[2]:arr[get_random(ctr)]
-      param[tnum].index_updates[3]:set(get_id())
+      param[tnum].index_updates[2]:set(arr[get_random(ctr)])
+      param[tnum].index_updates[3]:set(arr[get_random(ctr)])
+      param[tnum].index_updates[4]:set(get_id())
       stmt[tnum].index_updates:execute()
 
       param[tnum].index_updates[1]:set(1)
-      param[tnum].index_updates[2]:arr[get_random(ctr)]
-      param[tnum].index_updates[3]:set(get_id())
+      param[tnum].index_updates[2]:set(arr[get_random(ctr)])
+      param[tnum].index_updates[3]:set(arr[get_random(ctr)])
+      param[tnum].index_updates[4]:set(get_id())
       stmt[tnum].index_updates:execute()
 
    end
@@ -579,9 +587,33 @@ function execute_non_index_updates()
 
    for i = 1, sysbench.opt.non_index_updates do
       param[tnum].non_index_updates[1]:set(sysbench.rand.varstringalpha(3,3))
-      param[tnum].non_index_updates[2]:set(get_id())
+      param[tnum].non_index_updates[2]:set(arr[get_random(ctr)])
+      param[tnum].non_index_updates[3]:set(arr[get_random(ctr)])
+      param[tnum].non_index_updates[4]:set(get_id())
 
       stmt[tnum].non_index_updates:execute()
+   end
+end
+
+function execute_update_based_on_data1()
+   local tnum = get_table_num()
+
+   for i = 1, sysbench.opt.update_based_on_data1 do
+      param[tnum].update_based_on_data1[1]:set(arr[get_random(ctr)])
+      param[tnum].update_based_on_data1[2]:set(arr[get_random(ctr)])
+
+      stmt[tnum].update_based_on_data1:execute()
+   end
+end
+
+function execute_update_based_on_data2()
+   local tnum = get_table_num()
+
+   for i = 1, sysbench.opt.update_based_on_data2 do
+      param[tnum].update_based_on_data2[1]:set(arr[get_random(ctr)])
+      param[tnum].update_based_on_data2[2]:set(arr[get_random(ctr)])
+
+      stmt[tnum].update_based_on_data2:execute()
    end
 end
 
@@ -609,6 +641,8 @@ function execute_delete_inserts()
       param[tnum].inserts[4]:set(location)
       param[tnum].inserts[5]:set(active)
       param[tnum].inserts[6]:set(strrecordtype)
+      param[tnum].inserts[7]:set(arr[get_random(ctr)])
+      param[tnum].inserts[8]:set(arr[get_random(ctr)])
 
 
       stmt[tnum].deletes:execute()
