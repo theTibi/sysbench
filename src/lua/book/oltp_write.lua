@@ -30,6 +30,8 @@ function prepare_statements()
    prepare_index_updates()
    prepare_non_index_updates()
    prepare_delete_inserts()
+   prepare_update_based_on_data1()
+   prepare_update_based_on_data2()
 end
 
 function event()
@@ -40,6 +42,8 @@ function event()
    execute_index_updates()
    execute_non_index_updates()
    execute_delete_inserts()
+   execute_update_based_on_data1()
+   execute_update_based_on_data2()
 
    if not sysbench.opt.skip_trx then
       commit()
