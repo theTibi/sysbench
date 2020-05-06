@@ -240,11 +240,13 @@ function create_table(drv, con, table_num)
   `active` tinyint(2) NOT NULL DEFAULT '1',
   `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `strrecordtype` char(3) COLLATE utf8_bin NOT NULL,
-  `data` varchar(255) DEFAULT NULL,
+  `data1` varchar(255) DEFAULT NULL,
+  `data2` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `IDX_millid` (`millid`,`active`),
   KEY `IDX_active` (`id`,`active`),
-  KEY `IDX_data` (`data`)
+  KEY `IDX_data1` (`data1`),
+  KEY `IDX_data1` (`data1`)
   ) %s ROW_FORMAT=DYNAMIC  %s]],
 sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
 
@@ -259,9 +261,9 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
    end
 
    if sysbench.opt.auto_inc then
-      query = "INSERT INTO " ..  sysbench.opt.table_name .. table_num .. "(uuid,millid,kwatts_s,date,location,active,strrecordtype,data) VALUES"
+      query = "INSERT INTO " ..  sysbench.opt.table_name .. table_num .. "(uuid,millid,kwatts_s,date,location,active,strrecordtype,data1,data2) VALUES"
    else
-      query = "INSERT INTO " ..  sysbench.opt.table_name .. table_num .. "(id,uuid,millid,kwatts_s,date,location,active,strrecordtype,data) VALUES"
+      query = "INSERT INTO " ..  sysbench.opt.table_name .. table_num .. "(id,uuid,millid,kwatts_s,date,location,active,strrecordtype,data1,data2) VALUES"
    end
 
    con:bulk_insert_init(query)
@@ -277,7 +279,8 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
    local location
    local active
    local strrecordtype = "@@@"
-   local data
+   local data1
+   local data2
 
 --sysbench.opt.table_size
    con:bulk_insert_init(query)
@@ -291,9 +294,10 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
       active = sysbench.rand.default(0,1)
       millid = sysbench.rand.default(1,400)
       kwatts_s = sysbench.rand.default(0,4000000)
-      data = arr[get_random(ctr)]
+      data1 = arr[get_random(ctr)]
+      data2 = arr[get_random(ctr)]
   --    data = sysbench.rand.varstring(5,50)
-      
+
       if (sysbench.opt.auto_inc) then
         -- "(uuid,millid,kwatts_s,date,location,active,strrecordtyped)
 	--
@@ -306,7 +310,8 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
                                location,
                                active,
                                strrecordtype,
-                               data
+                               data1,
+                               data2
                                )
       else
          query = string.format("(%d,%s, %d, %d,%s,'%s',%d,'%s','%s')",
@@ -318,7 +323,8 @@ sysbench.opt.table_name, table_num, id_def, engine_def, extra_table_options)
                                location,
                                active,
                                strrecordtype,
-                               data
+                               data1,
+                               data2
                                )
       end
       con:bulk_insert_next(query)
@@ -357,11 +363,11 @@ local stmt_defs = {
       "SELECT DISTINCT millid,active,kwatts_s   FROM %s%u WHERE id BETWEEN ? AND ? AND active =1 ORDER BY millid",
       t.INT, t.INT},
    index_updates = {
-      "UPDATE %s%u SET active=? WHERE id=?",
-      t.INT,t.INT},
+      "UPDATE %s%u SET active=?,data1=? WHERE id=?",
+      t.INT,{t.CHAR,255},t.INT},
    non_index_updates = {
-      "UPDATE %s%u SET strrecordtype=? WHERE id=?",
-       {t.CHAR,3},t.INT},
+      "UPDATE %s%u SET strrecordtype=?,data1=? WHERE id=?",
+       {t.CHAR,3},{t.CHAR,255},t.INT},
    deletes = {
       "DELETE FROM %s%u WHERE id=?",
       t.INT},
@@ -556,11 +562,13 @@ function execute_index_updates()
 
    for i = 1, sysbench.opt.index_updates do
       param[tnum].index_updates[1]:set(0)
-      param[tnum].index_updates[2]:set(get_id())
+      param[tnum].index_updates[2]:arr[get_random(ctr)]
+      param[tnum].index_updates[3]:set(get_id())
       stmt[tnum].index_updates:execute()
 
       param[tnum].index_updates[1]:set(1)
-      param[tnum].index_updates[2]:set(get_id())
+      param[tnum].index_updates[2]:arr[get_random(ctr)]
+      param[tnum].index_updates[3]:set(get_id())
       stmt[tnum].index_updates:execute()
 
    end
