@@ -36,6 +36,7 @@ function prepare_statements()
       prepare_distinct_ranges()
    end
 
+   prepare_index_selects()
    prepare_index_updates()
    prepare_non_index_updates()
    prepare_delete_inserts()
@@ -56,6 +57,7 @@ function event()
    if not sysbench.opt.skip_trx then
       begin()
    end
+   execute_index_selects()
    execute_index_updates()
    execute_point_selects()
    execute_non_index_updates()

@@ -51,6 +51,7 @@ sysbench.cmdline.options = {
       {"Number of UPDATE index queries per transaction", 1},
    non_index_updates =
       {"Number of UPDATE non-index queries per transaction", 1},
+   index_selects = {"Number of selects based on data1" ,1},
    update_based_on_data1 =
       {"Number of UPDATE on data1 queries per transaction", 1},
    update_based_on_data2 =
@@ -163,7 +164,7 @@ function get_pad_value()
 end
 
 function read_file_text()
-    local file = io.open("100.txt", "r");
+    local file = io.open("gutenberg_1_all.txt", "r");
     arr = {}
     ctr = 0
     for line in file:lines() do
@@ -178,6 +179,10 @@ function get_random(ctr)
     math.randomseed(os.clock()*100000000000)
     i = math.random(1, ctr)
     return i
+end
+
+function get_prefix()
+    c
 end
 
 
@@ -366,6 +371,9 @@ local stmt_defs = {
    inserts = {
       "INSERT INTO %s%u (id,uuid,millid,kwatts_s,date,location,active,strrecordtype,data1,data2) VALUES (?, UUID(), ?, ?, NOW(), ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE kwatts_s=kwatts_s+1",
       t.BIGINT, t.TINYINT,t.INT, {t.VARCHAR, 50},t.TINYINT, {t.CHAR, 3},{t.CHAR,255},{t.CHAR,255}},
+   index_selects = {
+      "SELECT id,data2 FROM %s%u WHERE data1=?",
+      {t.CHAR,255}}
    update_based_on_data1 = {
       "UPDATE %s%u SET data2=? WHERE data1=?",
        {t.CHAR,255},{t.CHAR,255}},
@@ -447,6 +455,10 @@ end
 
 function prepare_update_based_on_data1()
    prepare_for_each_table("update_based_on_data1")
+end
+
+function prepare_index_selects()
+   prepare_for_each_table("index_select")
 end
 
 function prepare_update_based_on_data2()
@@ -592,6 +604,17 @@ function execute_non_index_updates()
       param[tnum].non_index_updates[4]:set(get_id())
 
       stmt[tnum].non_index_updates:execute()
+   end
+end
+
+
+function execute_index_selects()
+   local tnum = get_table_num()
+
+   for i = 1, sysbench.opt.index_selects do
+      param[tnum].index_selects[1]:set(arr[get_random(ctr)])
+
+      stmt[tnum].index_selects:execute()
    end
 end
 
